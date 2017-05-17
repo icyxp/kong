@@ -20,17 +20,24 @@ JwtHandler.PRIORITY = 1000
 -- @return token JWT token contained in request (can be a table) or nil
 -- @return err
 local function retrieve_token(request, conf)
-  local uri_parameters = request.get_uri_args()
+--  local uri_parameters = request.get_uri_args()
+--
+--  for _, v in ipairs(conf.uri_param_names) do
+--    if uri_parameters[v] then
+--      return uri_parameters[v]
+--    end
+--  end
 
-  for _, v in ipairs(conf.uri_param_names) do
-    if uri_parameters[v] then
-      return uri_parameters[v]
-    end
+  local jwt_key = "authorization"
+  local authorization
+
+  authorization = ngx.var["cookie_" .. jwt_key]
+  if authorization == nil then
+    authorization = request.get_headers()[jwt_key]
   end
 
-  local authorization_header = request.get_headers()["authorization"]
-  if authorization_header then
-    local iterator, iter_err = ngx_re_gmatch(authorization_header, "\\s*[Bb]earer\\s+(.+)")
+  if authorization then
+    local iterator, iter_err = ngx_re_gmatch(authorization, "\\s*[Bb]earer\\s+(.+)")
     if not iterator then
       return nil, iter_err
     end
@@ -48,6 +55,19 @@ end
 
 function JwtHandler:new()
   JwtHandler.super.new(self, "jwt")
+end
+
+local function extended_vailidation(request, conf, claims)
+  local iat = claims.iat
+  local exp = claims.exp
+
+  if (iat and exp) == nil then
+    return {status = 401, message = "iat or exp time can't empty"}
+  end
+
+  if exp <= iat then
+    return {status = 401, message = "token expired"}
+  end
 end
 
 local function load_credential(jwt_secret_key)
@@ -161,6 +181,12 @@ local function do_authentication(conf)
   -- However this should not happen
   if not consumer then
     return false, {status = 403, message = string_format("Could not find consumer for '%s=%s'", conf.key_claim_name, jwt_secret_key)}
+  end
+
+  -- Extended validation by icyboy
+  local err = extended_vailidation(ngx.req, conf, claims)
+  if err then
+    responses.send(err.status, err.message)
   end
 
   set_consumer(consumer, jwt_secret)
