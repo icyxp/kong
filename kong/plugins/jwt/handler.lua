@@ -197,7 +197,16 @@ end
 
 function JwtHandler:access(conf)
   JwtHandler.super.access(self)
-  
+
+  -- add uri whitelist by icyboy
+  local method = ngx.var.request_method
+  local uri = ngx.var.uri
+  for _, v in ipairs(conf.uri_whitelist) do
+    if (v.method == method) and (v.uri == uri) then
+      return
+    end
+  end
+
   if ngx.ctx.authenticated_credential and conf.anonymous ~= "" then
     -- we're already authenticated, and we're configured for using anonymous, 
     -- hence we're in a logical OR between auth methods and we're already done.
