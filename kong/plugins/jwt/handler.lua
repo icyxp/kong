@@ -32,7 +32,7 @@ local function retrieve_token(request, conf)
   local authorization
 
   authorization = ngx.unescape_uri(ngx.var["cookie_" .. jwt_key])
-  if authorization == nil then
+  if authorization == "" then
     authorization = request.get_headers()[jwt_key]
   end
 

@@ -46,6 +46,7 @@ local dns = require "kong.tools.dns"
 local core = require "kong.core.handler"
 local Serf = require "kong.serf"
 local utils = require "kong.tools.utils"
+local helpers = require "kong.tools.function"
 local Events = require "kong.core.events"
 local responses = require "kong.tools.responses"
 local constants = require "kong.constants"
@@ -65,6 +66,20 @@ local function attach_hooks(events, hooks)
   for k, v in pairs(hooks) do
     events:subscribe(k, v)
   end
+end
+
+function sprint_r( ... )
+  return helpers.sprint_r(...)
+end
+
+function lprint_r( ... )
+  local rs = sprint_r(...)
+  print(rs)
+end
+
+function print_r( ... )
+  local rs = sprint_r(...)
+  ngx.say(rs)
 end
 
 local function load_plugins(kong_conf, dao, events)
