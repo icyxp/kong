@@ -89,14 +89,14 @@ local function load_consumer(consumer_id, anonymous)
   return result
 end
 
-local function set_consumer(consumer, jwt_secret, token)
+local function set_consumer(consumer, jwt_secret, claims, token)
   ngx_set_header(constants.HEADERS.CONSUMER_ID, consumer.id)
   ngx_set_header(constants.HEADERS.CONSUMER_CUSTOM_ID, consumer.custom_id)
   ngx_set_header(constants.HEADERS.CONSUMER_USERNAME, consumer.username)
   ngx_set_header(constants.HEADERS.AUTHORIZATION, "Bearer " .. token)
-  if (consumer.extra ~= nil) and (next(consumer.extra) ~= nil) then
-    ngx_set_header(constants.HEADERS.CONSUMER_USER_ID, consumer.extra.user_id)
-    ngx_set_header(constants.HEADERS.CONSUMER_TENANT_ID, consumer.extra.tenant_id)
+  if (claims.extra ~= nil) and (next(claims.extra) ~= nil) then
+    ngx_set_header(constants.HEADERS.CONSUMER_USER_ID, claims.extra.user_id)
+    ngx_set_header(constants.HEADERS.CONSUMER_TENANT_ID, claims.extra.tenant_id)
   end
   ngx.ctx.authenticated_consumer = consumer
   if jwt_secret then
@@ -194,7 +194,7 @@ local function do_authentication(conf)
     responses.send(err.status, err.message)
   end
 
-  set_consumer(consumer, jwt_secret, token)
+  set_consumer(consumer, jwt_secret, claims, token)
 
   return true
 end
@@ -227,7 +227,7 @@ function JwtHandler:access(conf)
       if err then
         return responses.send_HTTP_INTERNAL_SERVER_ERROR(err)
       end
-      set_consumer(consumer, nil)
+      set_consumer(consumer, nil, nil, nil)
     else
       return responses.send(err.status, err.message)
     end

@@ -617,7 +617,6 @@ function _M.new(apis)
   function self.exec(ngx)
     local method = ngx.req.get_method()
     local uri    = ngx.var.request_uri
-    -- print_r(uri)
 
     do
       local s = find(uri, "?", 2, true)

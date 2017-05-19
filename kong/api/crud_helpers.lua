@@ -230,13 +230,4 @@ function _M.delete(primary_keys, dao_collection)
   end
 end
 
-function _M.jwtBlacklist(params)
-  lprint_r(params)
-  if params.api_token == nil then
-    return responses.send_HTTP_BAD_REQUEST("api_token is required")
-  end
-
-  return responses.send_HTTP_CREATED()
-end
-
 return _M

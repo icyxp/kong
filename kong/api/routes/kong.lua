@@ -18,7 +18,6 @@ return {
     GET = function(self, dao, helpers)
       local distinct_plugins = {}
       local prng_seeds = {}
-      ngx.log(ngx.ERR, "I am herer->>>xp")
 
       do
         local rows, err = dao.plugins:find_all()
@@ -74,7 +73,6 @@ return {
   ["/status"] = {
     GET = function(self, dao, helpers)
       local r = ngx.location.capture "/nginx_status"
-      ngx.log(ngx.ERR, r.status)
       if r.status ~= 200 then
         return helpers.responses.send_HTTP_INTERNAL_SERVER_ERROR(r.body)
       end
