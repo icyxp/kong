@@ -43,7 +43,6 @@ local function retrieve_token(request, conf)
     end
 
     local m, err = iterator()
-    lprint_r(iterator())
     if err then
       return nil, err
     end
