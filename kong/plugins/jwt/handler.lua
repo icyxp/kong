@@ -31,7 +31,7 @@ local function retrieve_token(request, conf)
   local jwt_key = "authorization"
   local authorization
 
-  authorization = ngx.var["cookie_" .. jwt_key]
+  authorization = ngx.unescape_uri(ngx.var["cookie_" .. jwt_key])
   if authorization == nil then
     authorization = request.get_headers()[jwt_key]
   end
@@ -43,6 +43,7 @@ local function retrieve_token(request, conf)
     end
 
     local m, err = iterator()
+    lprint_r(iterator())
     if err then
       return nil, err
     end
@@ -89,10 +90,15 @@ local function load_consumer(consumer_id, anonymous)
   return result
 end
 
-local function set_consumer(consumer, jwt_secret)
+local function set_consumer(consumer, jwt_secret, token)
   ngx_set_header(constants.HEADERS.CONSUMER_ID, consumer.id)
   ngx_set_header(constants.HEADERS.CONSUMER_CUSTOM_ID, consumer.custom_id)
   ngx_set_header(constants.HEADERS.CONSUMER_USERNAME, consumer.username)
+  ngx_set_header(constants.HEADERS.AUTHORIZATION, "Bearer " .. token)
+  if (consumer.extra ~= nil) and (next(consumer.extra) ~= nil) then
+    ngx_set_header(constants.HEADERS.CONSUMER_USER_ID, consumer.extra.user_id)
+    ngx_set_header(constants.HEADERS.CONSUMER_TENANT_ID, consumer.extra.tenant_id)
+  end
   ngx.ctx.authenticated_consumer = consumer
   if jwt_secret then
     ngx.ctx.authenticated_credential = jwt_secret
@@ -189,7 +195,7 @@ local function do_authentication(conf)
     responses.send(err.status, err.message)
   end
 
-  set_consumer(consumer, jwt_secret)
+  set_consumer(consumer, jwt_secret, token)
 
   return true
 end
