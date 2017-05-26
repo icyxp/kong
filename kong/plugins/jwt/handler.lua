@@ -19,7 +19,7 @@ JwtHandler.PRIORITY = 1000
 -- @param conf Plugin configuration
 -- @return token JWT token contained in request (can be a table) or nil
 -- @return err
-local function retrieve_token(request, conf)
+local function retrieve_token(request)
 --  local uri_parameters = request.get_uri_args()
 --
 --  for _, v in ipairs(conf.uri_param_names) do
@@ -109,7 +109,7 @@ local function set_consumer(consumer, jwt_secret, claims, token)
 end
 
 local function do_authentication(conf)
-  local token, err = retrieve_token(ngx.req, conf)
+  local token, err = retrieve_token(ngx.req)
   if err then
     return responses.send_HTTP_INTERNAL_SERVER_ERROR(err)
   end
