@@ -20,17 +20,24 @@ JwtHandler.PRIORITY = 1000
 -- @return token JWT token contained in request (can be a table) or nil
 -- @return err
 local function retrieve_token(request, conf)
-  local uri_parameters = request.get_uri_args()
+--  local uri_parameters = request.get_uri_args()
+--
+--  for _, v in ipairs(conf.uri_param_names) do
+--    if uri_parameters[v] then
+--      return uri_parameters[v]
+--    end
+--  end
 
-  for _, v in ipairs(conf.uri_param_names) do
-    if uri_parameters[v] then
-      return uri_parameters[v]
-    end
+  local jwt_key = "authorization"
+  local authorization
+
+  authorization = ngx.unescape_uri(ngx.var["cookie_" .. jwt_key])
+  if authorization == "" then
+    authorization = request.get_headers()[jwt_key]
   end
 
-  local authorization_header = request.get_headers()["authorization"]
-  if authorization_header then
-    local iterator, iter_err = ngx_re_gmatch(authorization_header, "\\s*[Bb]earer\\s+(.+)")
+  if authorization then
+    local iterator, iter_err = ngx_re_gmatch(authorization, "\\s*[Bb]earer\\s+(.+)")
     if not iterator then
       return nil, iter_err
     end
@@ -48,6 +55,19 @@ end
 
 function JwtHandler:new()
   JwtHandler.super.new(self, "jwt")
+end
+
+local function extended_vailidation(request, conf, claims)
+  local iat = claims.iat
+  local exp = claims.exp
+
+  if (iat and exp) == nil then
+    return {status = 401, message = "iat or exp time can't empty"}
+  end
+
+  if exp <= iat then
+    return {status = 401, message = "token expired"}
+  end
 end
 
 local function load_credential(jwt_secret_key)
@@ -69,10 +89,15 @@ local function load_consumer(consumer_id, anonymous)
   return result
 end
 
-local function set_consumer(consumer, jwt_secret)
+local function set_consumer(consumer, jwt_secret, claims, token)
   ngx_set_header(constants.HEADERS.CONSUMER_ID, consumer.id)
   ngx_set_header(constants.HEADERS.CONSUMER_CUSTOM_ID, consumer.custom_id)
   ngx_set_header(constants.HEADERS.CONSUMER_USERNAME, consumer.username)
+  ngx_set_header(constants.HEADERS.AUTHORIZATION, "Bearer " .. token)
+  if (claims.extra ~= nil) and (next(claims.extra) ~= nil) then
+    ngx_set_header(constants.HEADERS.CONSUMER_USER_ID, claims.extra.user_id)
+    ngx_set_header(constants.HEADERS.CONSUMER_TENANT_ID, claims.extra.tenant_id)
+  end
   ngx.ctx.authenticated_consumer = consumer
   if jwt_secret then
     ngx.ctx.authenticated_credential = jwt_secret
@@ -163,7 +188,13 @@ local function do_authentication(conf)
     return false, {status = 403, message = string_format("Could not find consumer for '%s=%s'", conf.key_claim_name, jwt_secret_key)}
   end
 
-  set_consumer(consumer, jwt_secret)
+  -- Extended validation by icyboy
+  local err = extended_vailidation(ngx.req, conf, claims)
+  if err then
+    responses.send(err.status, err.message)
+  end
+
+  set_consumer(consumer, jwt_secret, claims, token)
 
   return true
 end
@@ -171,7 +202,16 @@ end
 
 function JwtHandler:access(conf)
   JwtHandler.super.access(self)
-  
+
+  -- add uri whitelist by icyboy
+  local method = ngx.var.request_method
+  local uri = ngx.var.uri
+  for _, v in ipairs(conf.uri_whitelist) do
+    if (v.method == method) and (v.uri == uri) then
+      return
+    end
+  end
+
   if ngx.ctx.authenticated_credential and conf.anonymous ~= "" then
     -- we're already authenticated, and we're configured for using anonymous, 
     -- hence we're in a logical OR between auth methods and we're already done.
@@ -187,7 +227,7 @@ function JwtHandler:access(conf)
       if err then
         return responses.send_HTTP_INTERNAL_SERVER_ERROR(err)
       end
-      set_consumer(consumer, nil)
+      set_consumer(consumer, nil, nil, nil)
     else
       return responses.send(err.status, err.message)
     end
