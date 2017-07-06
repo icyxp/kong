@@ -132,7 +132,7 @@ local function extended_vailidation(request, conf, jwt_claims, app_key_claims)
 
   -- Verify jwt is expired
   if (iat and exp) == nil then
-    return {status = 403, message = "iat or exp time can't empty"}
+    return {status = 401, message = "iat or exp time can't empty"}
   end
 
   if exp <= iat then
@@ -261,14 +261,14 @@ local function decode_jwt(token, conf)
   end
 
   if not jwt_secret then
-    return false, {status = 403, message = "No credentials found for given '"..conf.key_claim_name.."'"}
+    return false, {status = 401, message = "No credentials found for given '"..conf.key_claim_name.."'"}
   end
 
   local algorithm = jwt_secret.algorithm or "HS256"
 
   -- Verify "alg"
   if jwt.header.alg ~= algorithm then
-    return false, {status = 403, message = "Invalid algorithm"}
+    return false, {status = 401, message = "Invalid algorithm"}
   end
 
   local jwt_secret_value = algorithm == "HS256" and jwt_secret.secret or jwt_secret.rsa_public_key
@@ -277,12 +277,12 @@ local function decode_jwt(token, conf)
   end
 
   if not jwt_secret_value then
-    return false, {status = 403, message = "Invalid key/secret"}
+    return false, {status = 401, message = "Invalid key/secret"}
   end
 
   -- Now verify the JWT signature
   if not jwt:verify_signature(jwt_secret_value) then
-    return false, {status = 403, message = "Invalid signature"}
+    return false, {status = 401, message = "Invalid signature"}
   end
 
   -- Verify the JWT registered claims
@@ -300,7 +300,7 @@ local function decode_jwt(token, conf)
 
   -- However this should not happen
   if not consumer then
-    return false, {status = 403, message = string_format("Could not find consumer for '%s=%s'", conf.key_claim_name, jwt_secret_key)}
+    return false, {status = 401, message = string_format("Could not find consumer for '%s=%s'", conf.key_claim_name, jwt_secret_key)}
   end
 
   return true, {consumer = consumer, jwt_secret = jwt_secret, claims = claims}

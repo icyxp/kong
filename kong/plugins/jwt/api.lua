@@ -53,17 +53,5 @@ return {
     DELETE = function(self, dao_factory)
       crud.delete(self.jwt_secret, dao_factory.jwt_secrets)
     end
-  },
-
-  ["/consumers/:username_or_id/jwt/blacklist/"] = {
-    before = function(self, dao_factory, helpers)
-      crud.find_consumer_by_username_or_id(self, dao_factory, helpers)
-      self.params.consumer_name = self.consumer.username
-    end,
-
-    POST = function(self)
-      crud.jwtBlacklist(self.params)
-    end,
-
   }
 }
