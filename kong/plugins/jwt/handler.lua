@@ -119,12 +119,16 @@ end
 local function extended_vailidation(request, conf, jwt_claims, app_key_claims)
 
   local claims
+  local verify_ip
   if (jwt_claims and app_key_claims) ~= nil then
     claims = app_key_claims
+    verify_ip = true
   elseif jwt_claims ~= nil then
     claims = jwt_claims
+    verify_ip = false
   else
     claims = app_key_claims
+    verify_ip = true
   end
 
   local iat = claims.iat
@@ -139,24 +143,24 @@ local function extended_vailidation(request, conf, jwt_claims, app_key_claims)
     return {status = 401, message = "token expired"}
   end
 
---  -- Verify ip addr
---  local current_remote_addr = ngx.var.remote_addr
---  local ip_decimal = 0
---  local postion = 3
---  for i in string.gmatch(current_remote_addr, [[%d+]]) do
---    ip_decimal = ip_decimal + math.pow(256, postion) * i
---    postion = postion - 1
---  end
---
---  local private
---  if (ip_decimal >= 0x7f000000 and ip_decimal <= 0x7fffffff) or -- 127.0.0.0 ~ 127.255.255.255
---          (ip_decimal >= 0x0a000000 and ip_decimal <= 0x0affffff) or -- 10.0.0.0 ~ 10.255.255.255
---          (ip_decimal >= 0xac100000 and ip_decimal <= 0xac1fffff) or -- 172.16.0.0 ~ 172.31.255.255
---          (ip_decimal >= 0xc0a80000 and ip_decimal <= 0xc0a8ffff) then   -- 192.168.0.0 ~ 192.168.255.255
---    private = true
---  else
---    private = false
---  end
+  -- Verify ip addr
+  if verify_ip == true then
+    local current_remote_addr = ngx.var.remote_addr
+    local ip_decimal = 0
+    local postion = 3
+    for i in string.gmatch(current_remote_addr, [[%d+]]) do
+      ip_decimal = ip_decimal + math.pow(256, postion) * i
+      postion = postion - 1
+    end
+
+    if (ip_decimal >= 0x7f000000 and ip_decimal <= 0x7fffffff) or -- 127.0.0.0 ~ 127.255.255.255
+            (ip_decimal >= 0x0a000000 and ip_decimal <= 0x0affffff) or -- 10.0.0.0 ~ 10.255.255.255
+            (ip_decimal >= 0xac100000 and ip_decimal <= 0xac1fffff) or -- 172.16.0.0 ~ 172.31.255.255
+            (ip_decimal >= 0xc0a80000 and ip_decimal <= 0xc0a8ffff) then   -- 192.168.0.0 ~ 192.168.255.255
+    else
+      return {status = 403, message = "app_token only intranet is allowed"}
+    end
+  end
 
   local authentication
   -- Verify user type
