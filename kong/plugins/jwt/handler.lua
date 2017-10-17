@@ -63,10 +63,6 @@ local function retrieve_token(request)
   end
 
   local app_key = request.get_headers()['x-app-key']
-  local app_key, err2 = mapping_jwt(app_key)
-  if err2 then
-    return responses.send_HTTP_INTERNAL_SERVER_ERROR(err2)
-  end
 
   return token, app_key
 end
@@ -88,8 +84,8 @@ local function uri_authentication(uri_list, request, conf, claims)
   local md5 = resty_md5:new()
   local len = #uri_list
 
-  -- md5(user_id + tenant_id + slat)
-  md5:update(claims.extra.user_id .. claims.extra.tenant_id .. conf.slat)
+  -- md5(user_id + tenant_id + slat + jwt sign time)
+  md5:update(claims.extra.user_id .. claims.extra.tenant_id .. conf.slat .. claims.iat)
   local digest = md5:final()
   local key = str.to_hex(digest)
 
