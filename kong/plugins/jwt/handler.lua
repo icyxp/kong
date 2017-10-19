@@ -209,7 +209,7 @@ local function set_consumer(consumer, jwt_secret, claims, jwt_token, app_key_tok
     ngx_set_header(constants.HEADERS.AUTHORIZATION, "Bearer " .. jwt_token)
   end
   if app_key_token ~= nil then
-    ngx_set_header(constants.HEADERS.APP_KEY, "Bearer " .. app_key_token)
+    ngx_set_header(constants.HEADERS.APP_KEY, app_key_token)
   end
 
   if (claims.extra ~= nil) and (next(claims.extra) ~= nil) then
