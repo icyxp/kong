@@ -50,7 +50,11 @@ return {
     CONSUMER_GROUPS = "X-Consumer-Groups",
     FORWARDED_HOST = "X-Forwarded-Host",
     FORWARDED_PREFIX = "X-Forwarded-Prefix",
-    ANONYMOUS = "X-Anonymous-Consumer"
+    ANONYMOUS = "X-Anonymous-Consumer",
+    AUTHORIZATION = "Authorization",
+    APP_KEY = "X-App-Key",
+    CONSUMER_USER_ID = "X-Consumer-User-ID",
+    CONSUMER_TENANT_ID = "X-Consumer-Tenant-ID",
   },
   RATELIMIT = {
     PERIODS = {
