@@ -108,6 +108,10 @@ local function uri_authentication(uri_list, request, conf, claims)
 
   --diff uri token
   local api_token = request.get_headers()["x-api-token"]
+  if api_token == nil then
+    local args = ngx.req.get_uri_args()
+    api_token = args.api_token
+  end
   if sign_token ~= api_token then
     return 403
   end
