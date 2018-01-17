@@ -36,9 +36,9 @@ do
   for _, dict in ipairs(constants.DICTS) do
     if not ngx.shared[dict] then
       return error("missing shared dict '" .. dict .. "' in Nginx "          ..
-                   "configuration, are you using a custom template? "        ..
-                   "Make sure the 'lua_shared_dict " .. dict .. " [SIZE];' " ..
-                   "directive is defined.")
+        "configuration, are you using a custom template? "        ..
+        "Make sure the 'lua_shared_dict " .. dict .. " [SIZE];' " ..
+        "directive is defined.")
     end
   end
 end
@@ -49,6 +49,7 @@ local ip = require "kong.tools.ip"
 local dns = require "kong.tools.dns"
 local core = require "kong.core.handler"
 local utils = require "kong.tools.utils"
+local fun = require "kong.tools.function"
 local lapis = require "lapis"
 local responses = require "kong.tools.responses"
 local singletons = require "kong.singletons"
@@ -74,6 +75,20 @@ local get_last_failure = ngx_balancer.get_last_failure
 local set_current_peer = ngx_balancer.set_current_peer
 local set_timeouts     = ngx_balancer.set_timeouts
 local set_more_tries   = ngx_balancer.set_more_tries
+
+function sprint_r( ... )
+  return fun.sprint_r(...)
+end
+
+function lprint_r( ... )
+  local rs = sprint_r(...)
+  print(rs)
+end
+
+function print_r( ... )
+  local rs = sprint_r(...)
+  ngx.say(rs)
+end
 
 local function load_plugins(kong_conf, dao)
   local in_db_plugins, sorted_plugins = {}, {}
@@ -339,8 +354,8 @@ function Kong.balancer()
   end
 
   ok, err = set_timeouts(addr.connect_timeout / 1000,
-                         addr.send_timeout / 1000,
-                         addr.read_timeout / 1000)
+    addr.send_timeout / 1000,
+    addr.read_timeout / 1000)
   if not ok then
     ngx_log(ngx_ERR, "could not set upstream timeouts: ", err)
   end
@@ -351,6 +366,8 @@ end
 function Kong.rewrite()
   local ctx = ngx.ctx
   core.rewrite.before(ctx)
+
+  -- ngx.say("hello world")
 
   -- we're just using the iterator, as in this rewrite phase no consumer nor
   -- api will have been identified, hence we'll just be executing the global
