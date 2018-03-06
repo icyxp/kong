@@ -54,6 +54,7 @@ Additionally, this release will also include all the changes listed under the
 This section describes publicly available releases and a detailed changeset of
 their content.
 
+<<<<<<< HEAD
 ## [0.12.2]
 
 ### Added
@@ -117,6 +118,7 @@ their content.
 
 [Back to TOC](#table-of-contents)
 
+=======
 ## [0.12.1] - 2018/01/18
 
 This release addresses a few issues encountered with 0.12.0, including one
