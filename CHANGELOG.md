@@ -175,6 +175,7 @@ upgrade your Kong cluster.
 
 ### Fixed
 
+<<<<<<< HEAD
 ##### Admin API
 
 - Fix several issues with application/multipart MIME type parsing of payloads.
@@ -245,6 +246,7 @@ upgrade your Kong cluster.
 
 [Back to TOC](#table-of-contents)
 
+=======
 ## [0.12.1] - 2018/01/18
 
 This release addresses a few issues encountered with 0.12.0, including one
