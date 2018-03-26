@@ -89,9 +89,12 @@ local function uri_authentication(uri_list, request, conf, claims)
   local digest = md5:final()
   local key = str.to_hex(digest)
 
-  -- remove dynamic uri parameter [4,6], trap in here!!
-  table.remove(uri_list, 6)
-  table.remove(uri_list, 4)
+  -- remove dynamic uri parameter [4,6,8,10,12], trap in here!!
+  for i = len, 4, -1 do
+    if i % 2 == 0 then
+      table.remove(uri_list, i)
+    end
+  end
 
   -- add method + len + md5
   table.insert(uri_list, method)
@@ -169,15 +172,8 @@ local function extended_vailidation(request, conf, jwt_claims, app_key_claims)
     return nil
   end
 
-  -- Verfiy uri prefix
-  local uri_list = string.split(ngx.var.uri, '/')
-  if ngx.re.match(uri_list[1], "inno-") and (uri_list[1] ~= "inno-static") then
-    authentication = true
-  else
-    return nil
-  end
-
   if authentication == true then
+    local uri_list = string.split(ngx.var.uri, '/')
     local code = uri_authentication(uri_list, request, conf, claims)
     if code ~= nil then
       return {status = code, message = "invalid api token"}
