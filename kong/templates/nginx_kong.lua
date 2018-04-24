@@ -75,6 +75,8 @@ server {
     error_log ${{PROXY_ERROR_LOG}} ${{LOG_LEVEL}};
 
     client_body_buffer_size ${{CLIENT_BODY_BUFFER_SIZE}};
+    client_header_buffer_size 4k;
+    large_client_header_buffers 4 32k;
 
 > if proxy_ssl_enabled then
     ssl_certificate ${{SSL_CERT}};
