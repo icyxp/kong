@@ -91,9 +91,12 @@ local function uri_authentication(uri_list, request, conf, claims)
   local digest = md5:final()
   local key = str.to_hex(digest)
 
-  -- remove dynamic uri parameter [4,6], trap in here!!
-  table.remove(uri_list, 6)
-  table.remove(uri_list, 4)
+  -- remove dynamic uri parameter [4,6,8,10,12], trap in here!!
+  for i = len, 4, -1 do
+    if i % 2 == 0 then
+      table.remove(uri_list, i)
+    end
+  end
 
   -- add method + len + md5
   table.insert(uri_list, method)

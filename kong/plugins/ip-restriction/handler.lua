@@ -65,18 +65,20 @@ end
 function IpRestrictionHandler:access(conf)
   IpRestrictionHandler.super.access(self)
   local block = false
-  local binary_remote_addr = ngx.var.binary_remote_addr
+  local upstream_x_forwarded_for = ngx.var.upstream_x_forwarded_for
+  local list = string.split(upstream_x_forwarded_for, ',')
+  local binary_remote_addr = list[1]
 
   if not binary_remote_addr then
     return responses.send_HTTP_FORBIDDEN("Cannot identify the client IP address, unix domain sockets are not supported.")
   end
 
   if conf.blacklist and #conf.blacklist > 0 then
-    block = iputils.binip_in_cidrs(binary_remote_addr, cidr_cache(conf.blacklist))
+    block = iputils.ip_in_cidrs(binary_remote_addr, cidr_cache(conf.blacklist))
   end
 
   if conf.whitelist and #conf.whitelist > 0 then
-    block = not iputils.binip_in_cidrs(binary_remote_addr, cidr_cache(conf.whitelist))
+    block = not iputils.ip_in_cidrs(binary_remote_addr, cidr_cache(conf.whitelist))
   end
 
   if block then
