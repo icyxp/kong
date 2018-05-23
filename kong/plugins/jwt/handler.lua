@@ -3,10 +3,12 @@ local BasePlugin = require "kong.plugins.base_plugin"
 local responses = require "kong.tools.responses"
 local constants = require "kong.constants"
 local jwt_decoder = require "kong.plugins.jwt.jwt_parser"
+local iputils = require "resty.iputils"
 
 local ipairs         = ipairs
 local string_format  = string.format
 local ngx_re_gmatch  = ngx.re.gmatch
+local request        = ngx.req
 local ngx_set_header = ngx.req.set_header
 local get_method     = ngx.req.get_method
 
@@ -18,6 +20,54 @@ local JwtHandler = BasePlugin:extend()
 
 JwtHandler.PRIORITY = 1005
 JwtHandler.VERSION = "0.1.0"
+
+string.split = function(s, p)
+  local rt= {}
+  string.gsub(s, '[^'..p..']+', function(w) table.insert(rt, w) end )
+  return rt
+end
+
+
+-- Will be removed in the future
+local new_tab
+do
+  local ok
+  ok, new_tab = pcall(require, "table.new")
+  if not ok then
+    new_tab = function() return {} end
+  end
+end
+
+-- cache of parsed CIDR values
+local cache = {}
+local function cidr_cache(cidr_tab)
+  local cidr_tab_len = #cidr_tab
+
+  local parsed_cidrs = new_tab(cidr_tab_len, 0) -- table of parsed cidrs to return
+
+  -- build a table of parsed cidr blocks based on configured
+  -- cidrs, either from cache or via iputils parse
+  -- TODO dont build a new table every time, just cache the final result
+  -- best way to do this will require a migration (see PR details)
+  for i = 1, cidr_tab_len do
+    local cidr        = cidr_tab[i]
+    local parsed_cidr = cache[cidr]
+
+    if parsed_cidr then
+      parsed_cidrs[i] = parsed_cidr
+
+    else
+      -- if we dont have this cidr block cached,
+      -- parse it and cache the results
+      local lower, upper = iputils.parse_cidr(cidr)
+
+      cache[cidr] = { lower, upper }
+      parsed_cidrs[i] = cache[cidr]
+    end
+  end
+
+  return parsed_cidrs
+end
 
 local function mapping_jwt(authorization)
   if authorization then
@@ -43,7 +93,7 @@ end
 -- @param conf Plugin configuration
 -- @return token JWT token contained in request (can be a table) or nil
 -- @return err
-local function retrieve_token(request)
+local function retrieve_token()
 --  local uri_parameters = request.get_uri_args()
 --
 --  for _, v in ipairs(conf.uri_param_names) do
@@ -71,18 +121,26 @@ function JwtHandler:new()
   JwtHandler.super.new(self, "jwt")
 end
 
-string.split = function(s, p)
-  local rt= {}
-  string.gsub(s, '[^'..p..']+', function(w) table.insert(rt, w) end )
-  return rt
+local function switch(t)
+  t.case = function (self, x, conf, claims)
+    local f = self[x] or self.default
+    if type(f) == "function" then
+        return f(conf, claims, self)
+    end
+  end
+  return t
 end
 
-local function uri_authentication(uri_list, request, conf, claims)
+local function uri_authentication(uri_list, conf, claims)
   -- domestic consumer uri authentication
   local method = ngx.var.request_method
   local sha1 = resty_sha1:new()
   local md5 = resty_md5:new()
   local len = #uri_list
+
+  if (claims.extra.user_id and claims.extra.tenant_id and claims.iat) == nil then
+    return 403
+  end
 
   -- md5(user_id + tenant_id + slat + jwt sign time)
   md5:update(claims.extra.user_id .. claims.extra.tenant_id .. conf.slat .. claims.iat)
@@ -110,7 +168,7 @@ local function uri_authentication(uri_list, request, conf, claims)
   --diff uri token
   local api_token = request.get_headers()["x-api-token"]
   if api_token == nil then
-    local args = ngx.req.get_uri_args()
+    local args = request.get_uri_args()
     api_token = args.api_token
   end
   if sign_token ~= api_token then
@@ -118,35 +176,53 @@ local function uri_authentication(uri_list, request, conf, claims)
   end
 end
 
-local function extended_vailidation(request, conf, jwt_claims, app_key_claims)
-
-  local claims
-  local verify_ip
-  if (jwt_claims and app_key_claims) ~= nil then
-    claims = app_key_claims
-    verify_ip = true
-  elseif jwt_claims ~= nil then
-    claims = jwt_claims
-    verify_ip = false
-  else
-    claims = app_key_claims
-    verify_ip = true
+local function app_key_authentication(uri_white)
+  local uri_list = string.split(ngx.var.uri, '/')
+  local method = ngx.var.request_method
+  local len = #uri_list
+  for i = len, 4, -1 do
+    if i % 2 == 0 then
+      table.remove(uri_list, i)
+    end
   end
 
-  local iat = claims.iat
-  local exp = claims.exp
+  local req_uri_concat = "/" .. table.concat(uri_list, "/")
+  for _, v in ipairs(uri_white) do --check whether the legal uri
+    if v.method == "*" then
+      local m, err = ngx.re.match(req_uri_concat, v.uri)
+    else
+      local m, err = ngx.re.match(method .. req_uri_concat, v.method .. v.uri)
+    end
 
-  -- Verify jwt is expired
-  if (iat and exp) == nil then
-    return {status = 401, message = "iat or exp time can't empty"}
+    if m ~= nil then
+      return false
+    end
   end
 
-  if exp <= iat then
-    return {status = 401, message = "token expired"}
-  end
+  return true
+end
 
-  -- Verify ip addr
-  if verify_ip == true then
+local rule = switch {
+  [1] = function (conf, claims) -- Url authentication
+    local uri_list = string.split(ngx.var.uri, '/')
+    local code = uri_authentication(uri_list, conf, claims)
+    if code ~= nil then
+      return {status = code, message = "invalid api token"}
+    end
+  end,
+  [2] = function (conf, claims)  -- app_key authentication,remove in the future
+    local in_house = conf.app_key_auth["in_house"]
+
+    local block = true
+    if in_house ~= nil then
+      block = app_key_authentication(in_house)
+    end
+
+    if block then
+      return {status = 403, message = "You don't have permission to access"}
+    end
+  end,
+  [3] = function (conf, claims) -- Verify private ip addr
     local current_remote_addr = ngx.var.remote_addr
     local ip_decimal = 0
     local postion = 3
@@ -162,23 +238,46 @@ local function extended_vailidation(request, conf, jwt_claims, app_key_claims)
     else
       return {status = 403, message = "app_token only intranet is allowed"}
     end
-  end
+  end,
+  default = function (conf, claims) -- default for third party system, remove in the future
+    local third_party = conf.app_key_auth["third_party"]
 
-  local authentication
-  -- Verify user type
-  if claims.client_type == 1 then
-    authentication = true
-  else
-    return nil
-  end
-
-  if authentication == true then
-    local uri_list = string.split(ngx.var.uri, '/')
-    local code = uri_authentication(uri_list, request, conf, claims)
-    if code ~= nil then
-      return {status = code, message = "invalid api token"}
+    local block = true
+    if third_party ~= nil then
+      block = app_key_authentication(third_party)
     end
+
+    if block then
+      return {status = 403, message = "You don't have permission to access"}
+    end
+  end,
+}
+
+local function extended_vailidation(conf, jwt_claims, app_key_claims)
+  local claims
+  local verify_ip = false
+  local authentication = false
+  if (jwt_claims and app_key_claims) ~= nil then
+    claims = app_key_claims
+  elseif jwt_claims ~= nil then
+    claims = jwt_claims
+  else
+    claims = app_key_claims
   end
+
+  local iat = claims.iat
+  local exp = claims.exp
+
+  if (iat and exp) == nil then
+    return {status = 401, message = "iat or exp time can't empty"}
+  end
+
+  -- Verify jwt is expired
+  if exp <= iat then
+    return {status = 401, message = "token expired"}
+  end
+
+  return rule:case(tonumber(claims.client_type), conf, claims)
 end
 
 local function load_credential(jwt_secret_key)
@@ -315,7 +414,7 @@ local function decode_jwt(token, conf)
 end
 
 local function do_authentication(conf)
-  local token, app_key = retrieve_token(ngx.req)
+  local token, app_key = retrieve_token()
 
   -- decode & vailidate jwt
   local ok, ok2 = true, true
@@ -341,11 +440,11 @@ local function do_authentication(conf)
   -- add extended vailidation
   local err
   if (token_data and app_key_data) ~= nil then
-    err = extended_vailidation(ngx.req, conf, token_data.claims, app_key_data.claims)
+    err = extended_vailidation(conf, token_data.claims, app_key_data.claims)
   elseif token_data ~= nil then
-    err = extended_vailidation(ngx.req, conf, token_data.claims, nil)
+    err = extended_vailidation(conf, token_data.claims, nil)
   else
-    err = extended_vailidation(ngx.req, conf, nil, app_key_data.claims)
+    err = extended_vailidation(conf, nil, app_key_data.claims)
   end
 
   -- check extended err
@@ -367,6 +466,14 @@ end
 
 function JwtHandler:access(conf)
   JwtHandler.super.access(self)
+
+  -- add ip whitelist, Will be removed in the future
+  local upstream_x_forwarded_for = ngx.var.upstream_x_forwarded_for
+  local list = string.split(upstream_x_forwarded_for, ',')
+  local binary_remote_addr = list[1]
+  if conf.ip_whitelist and #conf.ip_whitelist > 0 and iputils.ip_in_cidrs(binary_remote_addr, cidr_cache(conf.ip_whitelist)) then
+    return
+  end
 
   -- add uri whitelist by icyboy
   local method = ngx.var.request_method
