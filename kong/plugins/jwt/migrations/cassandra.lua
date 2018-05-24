@@ -50,4 +50,58 @@ return {
     end,
     down = function(_, _, dao) end  -- not implemented
   },
+  {
+    name = "2018-05-24-184000_jwt_uri_whitelist_default",
+    up = function(_, _, dao)
+      for ok, config, update in plugin_config_iterator(dao, "jwt") do
+        if not ok then
+          return config
+        end
+        if config.uri_whitelist == nil then
+          config.uri_whitelist = {}
+          local _, err = update(config)
+          if err then
+            return err
+          end
+        end
+      end
+    end,
+    down = function(_, _, dao) end  -- not implemented
+  },
+  {
+    name = "2018-05-24-184000_jwt_ip_whitelist_default",
+    up = function(_, _, dao)
+      for ok, config, update in plugin_config_iterator(dao, "jwt") do
+        if not ok then
+          return config
+        end
+        if config.ip_whitelist == nil then
+          config.ip_whitelist = {}
+          local _, err = update(config)
+          if err then
+            return err
+          end
+        end
+      end
+    end,
+    down = function(_, _, dao) end  -- not implemented
+  },
+  {
+    name = "2018-05-24-184000_jwt_app_key_auth_default",
+    up = function(_, _, dao)
+      for ok, config, update in plugin_config_iterator(dao, "jwt") do
+        if not ok then
+          return config
+        end
+        if config.app_key_auth == nil then
+          config.app_key_auth = {}
+          local _, err = update(config)
+          if err then
+            return err
+          end
+        end
+      end
+    end,
+    down = function(_, _, dao) end  -- not implemented
+  },
 }
