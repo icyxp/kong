@@ -187,11 +187,13 @@ local function app_key_authentication(uri_white)
   end
 
   local req_uri_concat = "/" .. table.concat(uri_list, "/")
+  local m = true
+  local err = nil
   for _, v in ipairs(uri_white) do --check whether the legal uri
     if v.method == "*" then
-      local m, err = ngx.re.match(req_uri_concat, v.uri)
+      m, err = ngx.re.match(req_uri_concat, v.uri)
     else
-      local m, err = ngx.re.match(method .. req_uri_concat, v.method .. v.uri)
+      m, err = ngx.re.match(method .. req_uri_concat, v.method .. v.uri)
     end
 
     if m ~= nil then
