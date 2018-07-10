@@ -4,6 +4,7 @@ local responses = require "kong.tools.responses"
 local constants = require "kong.constants"
 local jwt_decoder = require "kong.plugins.jwt.jwt_parser"
 local iputils = require "resty.iputils"
+local basic_serializer = require "kong.plugins.log-serializers.basic"
 
 local ipairs         = ipairs
 local string_format  = string.format
@@ -275,7 +276,7 @@ local function extended_vailidation(conf, jwt_claims, app_key_claims)
   end
 
   -- Verify jwt is expired
-  if exp <= iat then
+  if (exp <= iat) or (exp < ngx.time()) then
     return {status = 401, message = "token expired"}
   end
 

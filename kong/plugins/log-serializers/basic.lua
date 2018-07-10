@@ -13,6 +13,8 @@ function _M.serialize(ngx)
     }
   end
 
+  -- get request body
+  ngx.req.read_body()
   return {
     request = {
       uri = ngx.var.request_uri,
@@ -20,6 +22,7 @@ function _M.serialize(ngx)
       querystring = ngx.req.get_uri_args(), -- parameters, as a table
       method = ngx.req.get_method(), -- http method
       headers = ngx.req.get_headers(),
+      body = ngx.req.get_body_data(),
       size = ngx.var.request_length
     },
     upstream_uri = ngx.var.upstream_uri,
