@@ -67,6 +67,11 @@ function FileLogHandler:new()
   FileLogHandler.super.new(self, "file-log")
 end
 
+function FileLogHandler:access()
+  FileLogHandler.super.access(self)
+  ngx.req.read_body()    
+end
+
 function FileLogHandler:log(conf)
   FileLogHandler.super.log(self)
   local message = basic_serializer.serialize(ngx)

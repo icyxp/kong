@@ -1,8 +1,10 @@
 local tablex = require "pl.tablex"
+local cjson = require "cjson"
 
 local _M = {}
 
 local EMPTY = tablex.readonly({})
+local CONTENT_TYPE_JSON      = "application/json"
 
 function _M.serialize(ngx)
   local authenticated_entity
@@ -14,9 +16,12 @@ function _M.serialize(ngx)
   end
 
   local request_uri = ngx.var.request_uri or ""
-  
-  -- get request body
-  ngx.req.read_body()
+  local content_type = ngx.req.get_headers()['content-type'] or ""
+  local body = ngx.req.get_body_data()
+  if (body ~= nil) and (content_type == CONTENT_TYPE_JSON) then
+    body = cjson.decode(body)
+  end
+
   return {
     request = {
       uri = request_uri,
@@ -24,7 +29,7 @@ function _M.serialize(ngx)
       querystring = ngx.req.get_uri_args(), -- parameters, as a table
       method = ngx.req.get_method(), -- http method
       headers = ngx.req.get_headers(),
-      body = ngx.req.get_body_data(),
+      body = body,
       size = ngx.var.request_length
     },
     upstream_uri = ngx.var.upstream_uri,
