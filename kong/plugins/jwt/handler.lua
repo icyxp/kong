@@ -143,17 +143,32 @@ local function uri_authentication(uri_list, conf, claims)
     return 403
   end
 
-  -- md5(user_id + tenant_id + slat + jwt sign time)
-  md5:update(claims.extra.user_id .. claims.extra.tenant_id .. conf.slat .. claims.iat)
-  local digest = md5:final()
-  local key = str.to_hex(digest)
-
   -- remove dynamic uri parameter [4,6,8,10,12], trap in here!!
   for i = len, 4, -1 do
     if i % 2 == 0 then
       table.remove(uri_list, i)
     end
   end
+
+  -- not need to check uri verifiy
+  local req_uri_concat = "/" .. table.concat(uri_list, "/")
+  local m = true
+  for _, v in ipairs(conf.uri_whitelist_with_jwt) do --check whether the legal uri
+    if v.method == "*" then
+      m, _ = ngx.re.match(req_uri_concat, v.uri)
+    else
+      m, _ = ngx.re.match(method .. req_uri_concat, v.method .. v.uri)
+    end
+
+    if m ~= nil then
+      return
+    end
+  end
+
+  -- md5(user_id + tenant_id + slat + jwt sign time)
+  md5:update(claims.extra.user_id .. claims.extra.tenant_id .. conf.slat .. claims.iat)
+  local digest = md5:final()
+  local key = str.to_hex(digest)
 
   -- add method + len + md5
   table.insert(uri_list, method)
@@ -189,12 +204,11 @@ local function app_key_authentication(uri_white)
 
   local req_uri_concat = "/" .. table.concat(uri_list, "/")
   local m = true
-  local err = nil
   for _, v in ipairs(uri_white) do --check whether the legal uri
     if v.method == "*" then
-      m, err = ngx.re.match(req_uri_concat, v.uri)
+      m, _ = ngx.re.match(req_uri_concat, v.uri)
     else
-      m, err = ngx.re.match(method .. req_uri_concat, v.method .. v.uri)
+      m, _ = ngx.re.match(method .. req_uri_concat, v.method .. v.uri)
     end
 
     if m ~= nil then
@@ -403,7 +417,7 @@ local function decode_jwt(token, conf)
   if conf.maximum_expiration ~= nil and conf.maximum_expiration > 0 then
     local ok, errors = jwt:check_maximum_expiration(conf.maximum_expiration)
     if not ok then
-      return false, {status = 403, message = errors}
+      return false, {status = 401, message = errors}
     end
   end
 

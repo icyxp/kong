@@ -122,4 +122,22 @@ return {
     end,
     down = function(_, _, dao) end  -- not implemented
   },
+  {
+    name = "2019-01-02-134000_jwt_uri_whitelist_with_jwt_default",
+    up = function(_, _, dao)
+      for ok, config, update in plugin_config_iterator(dao, "jwt") do
+        if not ok then
+          return config
+        end
+        if config.uri_whitelist_with_jwt == nil then
+          config.uri_whitelist_with_jwt = {}
+          local _, err = update(config)
+          if err then
+            return err
+          end
+        end
+      end
+    end,
+    down = function(_, _, dao) end  -- not implemented
+  },
 }
