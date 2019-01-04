@@ -114,6 +114,19 @@ server {
     $(el.name) $(el.value);
 > end
 
+    set $flag 0;
+    if ($host ~* innosnap\.com) {
+        set $flag "${flag}1";
+    }
+
+    if ($http_x_forwarded_proto = "http") {
+        set $flag "${flag}2";
+    }
+
+    if ($flag = "012") {
+        return 301 https://$host$request_uri;
+    }
+
     location / {
         default_type                     '';
 
