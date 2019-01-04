@@ -36,6 +36,7 @@ return {
     key_claim_name = {type = "string", default = "iss"},
     slat = {type = "string", default = "zQon7#y>[)p=3267"},
     uri_whitelist = {type= "array", default = {}},
+    uri_whitelist_with_jwt = {type= "array", default = {}},
     ip_whitelist = {type = "array", func = validate_ips},
     app_key_auth = {type= "table", default = {}},
     secret_is_base64 = {type = "boolean", default = false},
