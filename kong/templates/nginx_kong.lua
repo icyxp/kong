@@ -119,6 +119,10 @@ server {
         set $flag "${flag}1";
     }
 
+    if ($host ~* tpms(.*)\.innosnap\.com) {
+        set $flag "${flag}3";
+    }
+
     if ($http_x_forwarded_proto = "http") {
         set $flag "${flag}2";
     }
