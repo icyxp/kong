@@ -245,20 +245,20 @@ Enterprise](https://konghq.com/kong-enterprise-edition/).
 
 ## Overview Architecture based on kong 
 ### Architecture
-[![][saas-architecture]][Management system SAAS/Local Architecture]
+[![][saas-architecture]][saas-architecture]
 
 ### Web timing diagram
-[![][jwt-timing]][web jwt timing diagram]
+[![][jwt-timing]][jwt-timing]
 
 ### In-house Web timing diagram
-[![][jwt-inhouse-timing]][in house jwt timing diagram]
+[![][jwt-inhouse-timing]][jwt-inhouse-timing]
 
 ### Design
 #### 客户端请求用户服务进行登录,返回对应的 JWT 以及对应的『api path』
 
 1. 登录验证（`Kong 判断请求为 POST 提交登录接口则直接放行，不进行 JWT 验证，且登录接口不应受限于 『api path』鉴权`）。
 2. 通过登录验证后，服务签发（设置 Cookie）JWT（参考：http://jwtbuilder.jamiekurtz.com/），同时返回用户信息，用户信息中也包含了 JWT，可以用于不方便处理 setcookie Response 的地方
-```json
+```
 //JWT payload 部分的必要信息
 {
     iss: 签发服务从 Kong 得到的签发者ID，同时得到的还有 secret，用于 JWT 签名
@@ -274,7 +274,7 @@ Enterprise](https://konghq.com/kong-enterprise-edition/).
 }
 ```  
 3. 通过登录验证后，请求 /inno-user/user/v1/user/getUserApiPath 接口将返回给客户端 JSON 格式的『api path』
-```
+```json
 {
   "exp" : 47123100000,
   "apis" : {
@@ -306,7 +306,7 @@ token 生成规则： sha1(服务划分名称 + 具体服务 + 服务内路由�
 ```
 inno-user             /              user            /            users            /            :id            /            fee            /            :id         <----------------- 目录分隔符隔开的 path 层级为 6
 
-服务划分名称                  具体服务                      固定值                       动态值                   固定值                   动态值
+服务划分名称                        具体服务                      固定值                       动态值                   固定值                   动态值
 ```
 
 示例：
