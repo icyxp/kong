@@ -19,12 +19,26 @@ IRC (freenode): [#kong](http://webchat.freenode.net/?channels=kong) |
 
 ## Summary
 
-- [**Why Kong?**](#why-kong)
-- [**Features**](#features)
-- [**Distributions**](#distributions)
-- [**Development**](#development)
-- [**Enterprise Support & Demo**](#enterprise-support--demo)
-- [**License**](#license)
+- [Summary](#summary)
+- [Why Kong?](#why-kong)
+- [Features](#features)
+- [Distributions](#distributions)
+- [Development](#development)
+    - [Vagrant](#vagrant)
+    - [Source Install](#source-install)
+    - [Running for development](#running-for-development)
+    - [Tests](#tests)
+    - [Makefile](#makefile)
+- [Enterprise Support & Demo](#enterprise-support--demo)
+- [Overview Architecture based on kong](#overview-architecture-based-on-kong)
+  - [Architecture](#architecture)
+  - [Web timing diagram](#web-timing-diagram)
+  - [In-house Web timing diagram](#in-house-web-timing-diagram)
+  - [Design](#design)
+    - [客户端请求用户服务进行登录,返回对应的 JWT 以及对应的『api path』](#客户端请求用户服务进行登录返回对应的-jwt-以及对应的api-path)
+    - [应用 JWT 以及『api path』场景](#应用-jwt-以及api-path场景)
+    - [客户端请求中 Token 承载方式](#客户端请求中-token-承载方式)
+- [License](#license)
 
 ## Why Kong?
 
@@ -214,20 +228,139 @@ $ make lint
 
 When developing, you can use the `Makefile` for doing the following operations:
 
-| Name               | Description                                            |
-| ------------------:| -------------------------------------------------------|
-| `install`          | Install the Kong luarock globally                      |
-| `dev`              | Install development dependencies                       |
-| `lint`             | Lint Lua files in `kong/` and `spec/`                  |
-| `test`             | Run the unit tests suite                               |
-| `test-integration` | Run the integration tests suite                        |
-| `test-plugins`     | Run the plugins test suite                             |
-| `test-all`         | Run all unit + integration + plugins tests at once     |
+|               Name | Description                                        |
+| -----------------: | -------------------------------------------------- |
+|          `install` | Install the Kong luarock globally                  |
+|              `dev` | Install development dependencies                   |
+|             `lint` | Lint Lua files in `kong/` and `spec/`              |
+|             `test` | Run the unit tests suite                           |
+| `test-integration` | Run the integration tests suite                    |
+|     `test-plugins` | Run the plugins test suite                         |
+|         `test-all` | Run all unit + integration + plugins tests at once |
 
 ## Enterprise Support & Demo
 
 If you are working in a large organization you should learn more about [Kong
 Enterprise](https://konghq.com/kong-enterprise-edition/).
+
+## Overview Architecture based on kong 
+### Architecture
+[![][saas-architecture]][Management system SAAS/Local Architecture]
+
+### Web timing diagram
+[![][jwt-timing]][web jwt timing diagram]
+
+### In-house Web timing diagram
+[![][jwt-inhouse-timing]][in house jwt timing diagram]
+
+### Design
+#### 客户端请求用户服务进行登录,返回对应的 JWT 以及对应的『api path』
+
+1. 登录验证（`Kong 判断请求为 POST 提交登录接口则直接放行，不进行 JWT 验证，且登录接口不应受限于 『api path』鉴权`）。
+2. 通过登录验证后，服务签发（设置 Cookie）JWT（参考：http://jwtbuilder.jamiekurtz.com/），同时返回用户信息，用户信息中也包含了 JWT，可以用于不方便处理 setcookie Response 的地方
+```json
+//JWT payload 部分的必要信息
+{
+    iss: 签发服务从 Kong 得到的签发者ID，同时得到的还有 secret，用于 JWT 签名
+    iat：签发时间，时间戳
+    exp：失效时间，时间戳
+    client_type: 1 = 普通用户| 2 = 内部用户| 3 = 系统用户
+    app_key: 预签发的 JWT 中为随机字符串(2,3 用户类型)，普通用户为 null
+    extra:{ // 预签发的 JWT 中为空数组
+        tenant_id: 租户ID
+        user_id: 用户ID
+        ...
+    }
+}
+```  
+3. 通过登录验证后，请求 /inno-user/user/v1/user/getUserApiPath 接口将返回给客户端 JSON 格式的『api path』
+```
+{
+  "exp" : 47123100000,
+  "apis" : {
+      "GETxxx" : {
+        "url" : "xxx",
+        "summary": "Get something",
+        "token" : "xxx",
+        "method" : "POST"
+      },
+      "GETinno-user\/user\/users" : {
+        "url" : "inno-user\/user\/users",
+        "summary": "Get users",
+        "token" : "xxxxxxx",
+        "method" : "GET"
+      },
+      "GETinno-user\/user\/users\/{id}" : {
+        "url" : "inno-user\/user\/users\/{id}",
+        "summary": "Get user",
+        "token" : "xxxxxxx",
+        "method" : "GET"
+      }
+  }
+}
+```
+   
+token 生成规则： sha1(服务划分名称 + 具体服务 + 服务内路由取固定值 + Http Method（大写）+ URL 的 path 层级数量 + md5(用户id + 租户id + 固定salt + jwt签发时间iat)) 
+
+举个例子：
+```
+inno-user             /              user            /            users            /            :id            /            fee            /            :id         <----------------- 目录分隔符隔开的 path 层级为 6
+
+服务划分名称                  具体服务                      固定值                       动态值                   固定值                   动态值
+```
+
+示例：
+```
+1. URL: inno-data/fee/fees/:id 
+   Method: GET
+   token: sha1(inno-data + fee + fees + GET + 4 + md5(user_id + tenant_id + salt + iat)) 
+
+2. URL: inno-data/patent/patents/:id/fee 
+   Method: GET
+   token: sha1(inno-data + patent + patents + fee + GET + 5 + md5(user_id + tenant_id + salt + iat)) 
+
+3. URL: inno-data/patent/patents/:id/fee/:id 
+   Method: GET
+   token: sha1(inno-data + patent + patents + fee + GET + 6 + md5(user_id + tenant_id + salt + iat))
+```
+
+#### 应用 JWT 以及『api path』场景
+- 场景1：客户端请求某个后台服务
+
+  1. 客户端经过登录后得到 JWT 和『api path』，将 JWT 放入 Cookie / Header / GET 中，API Token 作为 API 的 GET 参数进行请求发送
+  2. Kong 通过从 Cookie / Header / GET 参数获取 JWT 进行验证是否是有效合法的 JWT
+  3. Kong 通过请求 URL 中的 token GET 参数进行验证是否当前用户有权限访问
+
+- 场景2：后台服务1 主动请求 后台服务2
+  
+  1. Token 签发服务预留系统用户账号，调用方服务需保存签发服务的相关配置（地址，账户等），后台服务使用预留的内部用户账号获取到 JWT，将 JWT 放入 Cookie / Header / GET 中进行请求发送
+  2. 内部服务无须 API Token
+  3. Kong 通过 Cookie / Header / GET 参数获取 JWT，解析得到客户端类型为内部用户，则跳过『api path』鉴权，直接进行转发
+
+- 场景3：本地 SAAS 内部部署服务（或者第三方系统）请求广域网 SASS 功能后台服务（如费用同步服务）
+  
+  1. Token 签发服务预留内部用户账号，调用方服务需保存签发服务的相关配置（地址，账户等），本地 SAAS 内部部署服务（或者第三方系统）使用预留的系统用户账号获取到 JWT，将 JWT 放入 Cookie / Header / GET 中进行请求发送
+  2. 系统服务无须 API Token「存疑」
+  3. Kong 通过 Cookie / Header / GET 参数获取 JWT，解析得到客户端类型为系统用户，则跳过『api path』鉴权，直接进行转发
+
+#### 客户端请求中 Token 承载方式
+**JWT（优先级越小越优先，Kong 优先读取优先级最高的可用 JWT）：**
+
+1. Cookie 优先级 1
+```
+Cookie：Authorization=Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhMzZjMzA0OWIzNjI0OWEzYzlmODg5MWNiMT.AhumfY35GFLuEEjrOXiaADo7Ae6gt_8VLwX7qffhQN4; OtherCookie=xxxxxxx
+```
+2. Header 优先级 2
+```
+Authorization: Bearer xxxxxxxxxxxxxxxxxxx
+示例 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhMzZjMzA0OWIzNjI0OWEzYzlmODg5MWNiMT.AhumfY35GFLuEEjrOXiaADo7Ae6gt_8VLwX7qffhQN4
+```
+
+**API Token**
+1. Header
+```
+X-API-Token=ZjMzA0OWIzNjI0OWEzYzlmODg5MWNiMTI
+```
 
 ## License
 
@@ -256,4 +389,6 @@ limitations under the License.
 
 [busted]: https://github.com/Olivine-Labs/busted
 [luacheck]: https://github.com/mpeterv/luacheck
-
+[saas-architecture]: https://raw.githubusercontent.com/icyxp/kong/feat/0.14.1/assets/images/saas.jpeg
+[jwt-timing]: https://raw.githubusercontent.com/icyxp/kong/feat/0.14.1/assets/images/jwt.jpeg
+[jwt-inhouse-timing]: https://raw.githubusercontent.com/icyxp/kong/feat/0.14.1/assets/images/jwt-inhouse.jpeg
