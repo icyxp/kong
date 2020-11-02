@@ -81,8 +81,8 @@ server {
     error_log ${{PROXY_ERROR_LOG}} ${{LOG_LEVEL}};
 
     client_body_buffer_size ${{CLIENT_BODY_BUFFER_SIZE}};
-    client_header_buffer_size 4k;
-    large_client_header_buffers 4 32k;
+    client_header_buffer_size 32k;
+    large_client_header_buffers 4 256k;
 
 > if proxy_ssl_enabled then
     ssl_certificate ${{SSL_CERT}};
@@ -113,31 +113,6 @@ server {
 > for _, el in ipairs(nginx_proxy_directives)  do
     $(el.name) $(el.value);
 > end
-
-    set $flag 0;
-    if ($host ~* innosnap\.com) {
-        set $flag "${flag}1";
-    }
-
-    if ($host ~* tpms(.*)\.innosnap\.com) {
-        set $flag "${flag}3";
-    }
-
-    if ($host ~* consul\.innosnap\.com) {
-        set $flag "${flag}3";
-    }
-    
-    if ($host ~* api-gateway\.innosnap\.com) {
-        set $flag "${flag}3";
-    } 
-
-    if ($http_x_forwarded_proto = "http") {
-        set $flag "${flag}2";
-    }
-
-    if ($flag = "012") {
-        return 301 https://$host$request_uri;
-    }
 
     location / {
         default_type                     '';
